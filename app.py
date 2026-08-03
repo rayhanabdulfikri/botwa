@@ -3,9 +3,15 @@ import os
 import threading
 import requests
 import time
+import spaces
 import gradio as gr
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+# Syarat wajib ZeroGPU HuggingFace
+@spaces.GPU
+def init_gpu():
+    return "ZeroGPU Ready"
 
 # 1. Jalankan Node.js Bot di background (Port 3000)
 def start_node_bot():
@@ -33,6 +39,6 @@ async def send_message(request: Request):
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
-# 4. Jalankan Gradio server secara langsung (Wajib agar server tidak exit)
+# 4. Jalankan Gradio server secara langsung
 print("Launching Gradio interface on port 7860...")
 demo.launch(server_name="0.0.0.0", server_port=7860)
