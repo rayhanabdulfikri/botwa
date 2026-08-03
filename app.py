@@ -22,7 +22,19 @@ def start_node_bot():
 
 threading.Thread(target=start_node_bot, daemon=True).start()
 
-# 2. Fungsi untuk mengambil tampilan HTML / QR Code dari Node.js (Port 3000)
+# 2. Fitur Keep-Alive Self-Ping (Mencegah HuggingFace Space Pause/Sleep)
+def keep_alive_ping():
+    while True:
+        try:
+            time.sleep(300) # Ping otomatis setiap 5 menit (300 detik)
+            requests.get("http://127.0.0.1:7860/", timeout=5)
+            print("Keep-Alive Ping Success!")
+        except Exception as e:
+            print("Keep-Alive Ping Log:", e)
+
+threading.Thread(target=keep_alive_ping, daemon=True).start()
+
+# 3. Fungsi untuk mengambil tampilan HTML / QR Code dari Node.js (Port 3000)
 def get_bot_status():
     try:
         res = requests.get("http://127.0.0.1:3000/", timeout=3)
@@ -30,7 +42,7 @@ def get_bot_status():
     except Exception:
         return "<div style='text-align:center; padding:30px; font-family:sans-serif;'><h3>Sedang menginisialisasi Bot WhatsApp... Silakan tunggu 5 detik lalu klik Refresh.</h3></div>"
 
-# 3. Tampilan Gradio UI
+# 4. Tampilan Gradio UI
 with gr.Blocks(title="WhatsApp Bot Arcade") as demo:
     gr.Markdown("# 🚀 Bot WhatsApp Arcade Fasilitator")
     gr.Markdown("Di bawah ini adalah tampilan QR Code / Status Bot WhatsApp Anda secara langsung:")
@@ -39,7 +51,7 @@ with gr.Blocks(title="WhatsApp Bot Arcade") as demo:
     refresh_btn = gr.Button("🔄 Refresh QR Code / Status", variant="primary")
     refresh_btn.click(fn=get_bot_status, outputs=bot_html)
 
-# 4. Proxy Endpoint /send-message untuk Google Apps Script
+# 5. Endpoint Proxy /send-message untuk Google Apps Script
 @demo.app.post("/send-message")
 async def send_message(request: Request):
     try:
