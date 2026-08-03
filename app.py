@@ -8,7 +8,6 @@ import gradio as gr
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-# Syarat wajib ZeroGPU HuggingFace
 @spaces.GPU
 def init_gpu():
     return "ZeroGPU Ready"
@@ -23,13 +22,24 @@ def start_node_bot():
 
 threading.Thread(target=start_node_bot, daemon=True).start()
 
-# 2. Buat Tampilan Gradio untuk HuggingFace Health Check (Port 7860)
+# 2. Fungsi untuk mengambil tampilan HTML / QR Code dari Node.js (Port 3000)
+def get_bot_status():
+    try:
+        res = requests.get("http://127.0.0.1:3000/", timeout=3)
+        return res.text
+    except Exception:
+        return "<div style='text-align:center; padding:30px; font-family:sans-serif;'><h3>Sedang menginisialisasi Bot WhatsApp... Silakan tunggu 5 detik lalu klik Refresh.</h3></div>"
+
+# 3. Tampilan Gradio UI
 with gr.Blocks(title="WhatsApp Bot Arcade") as demo:
     gr.Markdown("# 🚀 Bot WhatsApp Arcade Fasilitator")
-    gr.Markdown("Status: **Online** | Di bawah ini adalah tampilan QR Code / Status Bot WhatsApp Anda:")
-    gr.HTML('<iframe src="http://127.0.0.1:3000/" width="100%" height="450px" style="border:2px solid #25D366; border-radius:12px;"></iframe>')
+    gr.Markdown("Di bawah ini adalah tampilan QR Code / Status Bot WhatsApp Anda secara langsung:")
+    
+    bot_html = gr.HTML(value=get_bot_status)
+    refresh_btn = gr.Button("🔄 Refresh QR Code / Status", variant="primary")
+    refresh_btn.click(fn=get_bot_status, outputs=bot_html)
 
-# 3. Endpoint Proxy /send-message untuk Google Apps Script
+# 4. Proxy Endpoint /send-message untuk Google Apps Script
 @demo.app.post("/send-message")
 async def send_message(request: Request):
     try:
@@ -39,6 +49,4 @@ async def send_message(request: Request):
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
-# 4. Jalankan Gradio server secara langsung
-print("Launching Gradio interface on port 7860...")
 demo.launch(server_name="0.0.0.0", server_port=7860)
