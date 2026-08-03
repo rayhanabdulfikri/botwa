@@ -7,6 +7,7 @@ sdk: gradio
 sdk_version: "4.44.0"
 app_file: app.py
 pinned: true
+hardware: cpu-basic
 ---
 
 # 🚀 Bot WhatsApp Arcade Fasilitator
