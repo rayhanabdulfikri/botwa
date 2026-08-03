@@ -23,10 +23,8 @@ with gr.Blocks(title="WhatsApp Bot Arcade") as demo:
     gr.Markdown("Status: **Online** | Di bawah ini adalah tampilan QR Code / Status Bot WhatsApp Anda:")
     gr.HTML('<iframe src="http://127.0.0.1:3000/" width="100%" height="450px" style="border:2px solid #25D366; border-radius:12px;"></iframe>')
 
-app = demo.app
-
 # 3. Endpoint Proxy /send-message untuk Google Apps Script
-@app.post("/send-message")
+@demo.app.post("/send-message")
 async def send_message(request: Request):
     try:
         body = await request.json()
@@ -34,3 +32,7 @@ async def send_message(request: Request):
         return JSONResponse(content=res.json(), status_code=res.status_code)
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
+# 4. Jalankan Gradio server secara langsung (Wajib agar server tidak exit)
+print("Launching Gradio interface on port 7860...")
+demo.launch(server_name="0.0.0.0", server_port=7860)
