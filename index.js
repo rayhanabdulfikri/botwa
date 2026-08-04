@@ -110,7 +110,7 @@ app.post('/send-message', async (req, res) => {
 // Endpoint Otomatis Masuk Grup WA via Link Invite (e.g. BebJ3vwKM8j3t1fEiy7GS4)
 app.post('/join-group', async (req, res) => {
     try {
-        const { inviteCode } = req.body; // kode invite misal "BebJ3vwKM8j3t1fEiy7GS4" atau URL full
+        const { inviteCode } = req.body;
         let code = inviteCode || '';
         if (code.includes('chat.whatsapp.com/')) {
             code = code.split('chat.whatsapp.com/')[1].trim();
@@ -124,10 +124,10 @@ app.post('/join-group', async (req, res) => {
     }
 });
 
-// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS
+// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS (Dukung @everyone / mentionAll)
 app.post('/send-group', async (req, res) => {
     try {
-        const { groupJid, inviteCode, message, mentions } = req.body;
+        const { groupJid, inviteCode, message, mentions, mentionAll } = req.body;
         
         let targetJid = groupJid;
         if (!targetJid && inviteCode) {
@@ -142,9 +142,11 @@ app.post('/send-group', async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'groupJid/inviteCode dan message wajib diisi' });
         }
 
-        // Susun array mentions (nomor HP berformat 628xxx@s.whatsapp.net)
         let mentionJids = [];
-        if (Array.isArray(mentions)) {
+        if (mentionAll) {
+            const groupMeta = await sock.groupMetadata(targetJid);
+            mentionJids = groupMeta.participants.map(p => p.id);
+        } else if (Array.isArray(mentions)) {
             mentionJids = mentions.map(num => String(num).replace(/[^0-9]/g, '') + '@s.whatsapp.net');
         }
 
