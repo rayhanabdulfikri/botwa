@@ -49,26 +49,65 @@ async function connectToWhatsApp() {
     });
 }
 
-// Endpoint untuk lihat QR di browser
+// Endpoint JSON Status untuk auto-check halaman
+app.get('/status', (req, res) => {
+    return res.json({
+        status: connectionStatus,
+        connected: connectionStatus === 'Connected',
+        qrUrl: latestQrUrl
+    });
+});
+
+// Endpoint untuk lihat QR di browser dengan Auto-Refresh setelah discan
 app.get('/', (req, res) => {
     if (connectionStatus === 'Connected') {
         return res.send(`
             <div style="text-align:center; padding:50px; font-family:sans-serif;">
-                <h1>✅ Bot WhatsApp Berhasil Terhubung!</h1>
+                <h1 style="color:#25D366;">✅ Bot WhatsApp Berhasil Terhubung!</h1>
                 <p style="color:#666;">Ingin mengganti ke Nomor WA kedua? <a href="/logout" onclick="return confirm('Yakin ingin logout & scan QR baru?')" style="color:red; font-weight:bold;">Klik Logout di sini</a></p>
             </div>
         `);
     }
-    if (latestQrUrl) {
-        return res.send(`
-            <div style="text-align:center; padding: 30px; font-family: sans-serif;">
+
+    return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Scan QR WhatsApp</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: sans-serif; text-align: center; padding: 30px; background-color: #f7f9fa; }
+                .card { background: white; padding: 30px; border-radius: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                img { border: 3px solid #25D366; padding: 10px; border-radius: 12px; max-width: 280px; }
+            </style>
+        </head>
+        <body>
+            <div class="card" id="mainCard">
                 <h2>Scan QR Code dengan WA Nomor Kedua Anda:</h2>
-                <img src="${latestQrUrl}" alt="QR Code" style="border: 2px solid #25D366; padding: 10px; border-radius: 12px; max-width: 300px;" />
-                <p style="color: #666;">Refresh halaman ini jika QR expired.</p>
+                ${latestQrUrl ? `<img src="${latestQrUrl}" alt="QR Code" />` : '<h3>Menginisialisasi QR Code... Sebentar lagi</h3>'}
+                <p style="color: #666; margin-top: 15px;">Halaman ini akan <b>otomatis berubah ke tampilan Berhasil</b> setelah discan di HP!</p>
             </div>
-        `);
-    }
-    return res.send('<div style="text-align:center; padding:50px; font-family:sans-serif;"><h2>Menginisialisasi Bot WhatsApp... Silakan refresh sebentar lagi.</h2></div>');
+
+            <script>
+                // Auto check status setiap 2 detik
+                setInterval(async () => {
+                    try {
+                        const res = await fetch('/status');
+                        const data = await res.json();
+                        if (data.connected) {
+                            document.getElementById('mainCard').innerHTML = \`
+                                <h1 style="color:#25D366;">✅ Bot WhatsApp Berhasil Terhubung!</h1>
+                                <p style="color:#666;">Ingin mengganti nomor? <a href="/logout" style="color:red; font-weight:bold;">Klik Logout di sini</a></p>
+                            \`;
+                        } else if (data.qrUrl && !document.querySelector('img')) {
+                            location.reload();
+                        }
+                    } catch(e) {}
+                }, 2000);
+            </script>
+        </body>
+        </html>
+    `);
 });
 
 // Endpoint untuk Logout & Ganti Nomor WA
@@ -139,11 +178,9 @@ app.post('/send-group', async (req, res) => {
                 targetJid = await sock.groupAcceptInvite(code);
             } catch (joinErr) {
                 console.log('Gagal accept invite, mencari grup terdaftar...', joinErr.message);
-                // Jika sudah ada di grup, cari dari grup yang diikuti bot
                 const allGroups = await sock.groupFetchAllParticipating();
                 const groupList = Object.values(allGroups);
                 if (groupList.length > 0) {
-                    // Pakai grup pertama yang diikuti bot jika ada
                     targetJid = groupList[0].id;
                 }
             }
