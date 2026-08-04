@@ -33,11 +33,21 @@ async function connectToWhatsApp() {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Koneksi terputus, menghubungkan ulang...', shouldReconnect);
-            connectionStatus = 'Disconnected. Reconnecting...';
-            if (shouldReconnect) {
-                connectToWhatsApp();
+            const isLoggedOut = (lastDisconnect.error)?.output?.statusCode === DisconnectReason.loggedOut;
+            console.log('Koneksi terputus. Is Logged Out:', isLoggedOut);
+            
+            connectionStatus = 'Disconnected';
+            latestQrUrl = '';
+
+            if (isLoggedOut) {
+                console.log('⚠️ Terdeteksi logout dari HP! Menghapus sesi lama & membuat QR Code baru...');
+                if (fs.existsSync(AUTH_FOLDER)) {
+                    try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch(e){}
+                }
+                setTimeout(() => { connectToWhatsApp(); }, 2000);
+            } else {
+                console.log('Menghubungkan ulang...');
+                setTimeout(() => { connectToWhatsApp(); }, 3000);
             }
         } else if (connection === 'open') {
             connectionStatus = 'Connected';
@@ -58,14 +68,39 @@ app.get('/status', (req, res) => {
     });
 });
 
-// Endpoint untuk lihat QR di browser dengan Auto-Refresh setelah discan
+// Endpoint untuk lihat QR di browser dengan Auto-Refresh otomatis
 app.get('/', (req, res) => {
     if (connectionStatus === 'Connected') {
         return res.send(`
-            <div style="text-align:center; padding:50px; font-family:sans-serif;">
-                <h1 style="color:#25D366;">✅ Bot WhatsApp Berhasil Terhubung!</h1>
-                <p style="color:#666;">Ingin mengganti ke Nomor WA kedua? <a href="/logout" onclick="return confirm('Yakin ingin logout & scan QR baru?')" style="color:red; font-weight:bold;">Klik Logout di sini</a></p>
-            </div>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Bot WhatsApp Terhubung</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { font-family: sans-serif; text-align: center; padding: 30px; background-color: #f7f9fa; }
+                    .card { background: white; padding: 40px; border-radius: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+                </style>
+            </head>
+            <body>
+                <div class="card" id="mainCard">
+                    <h1 style="color:#25D366;">✅ Bot WhatsApp Berhasil Terhubung!</h1>
+                    <p style="color:#666;">Ingin mengganti nomor? <a href="/logout" onclick="return confirm('Yakin ingin logout & scan QR baru?')" style="color:red; font-weight:bold;">Klik Logout di sini</a></p>
+                    <p style="color:#888; font-size:12px; margin-top:20px;">Jika Anda Keluar (Logout) dari WA HP Anda, halaman ini akan otomatis kembali menampilkan QR Code baru!</p>
+                </div>
+                <script>
+                    setInterval(async () => {
+                        try {
+                            const res = await fetch('/status');
+                            const data = await res.json();
+                            if (!data.connected) {
+                                location.reload();
+                            }
+                        } catch(e) {}
+                    }, 2000);
+                </script>
+            </body>
+            </html>
         `);
     }
 
@@ -89,16 +124,12 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
-                // Auto check status setiap 2 detik
                 setInterval(async () => {
                     try {
                         const res = await fetch('/status');
                         const data = await res.json();
                         if (data.connected) {
-                            document.getElementById('mainCard').innerHTML = \`
-                                <h1 style="color:#25D366;">✅ Bot WhatsApp Berhasil Terhubung!</h1>
-                                <p style="color:#666;">Ingin mengganti nomor? <a href="/logout" style="color:red; font-weight:bold;">Klik Logout di sini</a></p>
-                            \`;
+                            location.reload();
                         } else if (data.qrUrl && !document.querySelector('img')) {
                             location.reload();
                         }
@@ -162,7 +193,7 @@ app.post('/join-group', async (req, res) => {
     }
 });
 
-// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS (Robust Invite Code Resolution)
+// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS
 app.post('/send-group', async (req, res) => {
     try {
         const { groupJid, inviteCode, message, mentions, mentionAll } = req.body;
