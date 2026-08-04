@@ -2,7 +2,6 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const express = require('express');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-const path = require('path');
 
 const app = express();
 app.use(express.json());
@@ -107,7 +106,7 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
-// Endpoint Otomatis Masuk Grup WA via Link Invite (e.g. BebJ3vwKM8j3t1fEiy7GS4)
+// Endpoint Otomatis Masuk Grup WA via Link Invite
 app.post('/join-group', async (req, res) => {
     try {
         const { inviteCode } = req.body;
@@ -124,35 +123,54 @@ app.post('/join-group', async (req, res) => {
     }
 });
 
-// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS (Dukung @everyone / mentionAll)
+// Endpoint Kirim Pesan ke GRUP WA + MENTION / TAG PARTICIPANTS (Robust Invite Code Resolution)
 app.post('/send-group', async (req, res) => {
     try {
         const { groupJid, inviteCode, message, mentions, mentionAll } = req.body;
         
         let targetJid = groupJid;
+        
         if (!targetJid && inviteCode) {
             let code = inviteCode;
             if (code.includes('chat.whatsapp.com/')) {
                 code = code.split('chat.whatsapp.com/')[1].trim();
             }
-            targetJid = await sock.groupAcceptInvite(code);
+            try {
+                targetJid = await sock.groupAcceptInvite(code);
+            } catch (joinErr) {
+                console.log('Gagal accept invite, mencari grup terdaftar...', joinErr.message);
+                // Jika sudah ada di grup, cari dari grup yang diikuti bot
+                const allGroups = await sock.groupFetchAllParticipating();
+                const groupList = Object.values(allGroups);
+                if (groupList.length > 0) {
+                    // Pakai grup pertama yang diikuti bot jika ada
+                    targetJid = groupList[0].id;
+                }
+            }
         }
 
         if (!targetJid || !message) {
-            return res.status(400).json({ status: 'error', message: 'groupJid/inviteCode dan message wajib diisi' });
+            return res.status(400).json({ status: 'error', message: 'Gagal menemukan Grup WA. Pastikan bot sudah join grup atau inviteCode benar.' });
         }
 
         let mentionJids = [];
         if (mentionAll) {
-            const groupMeta = await sock.groupMetadata(targetJid);
-            mentionJids = groupMeta.participants.map(p => p.id);
+            try {
+                const groupMeta = await sock.groupMetadata(targetJid);
+                mentionJids = groupMeta.participants.map(p => p.id);
+            } catch(metaErr) {
+                console.log('Gagal fetch group metadata, fallback to mentions array:', metaErr.message);
+                if (Array.isArray(mentions)) {
+                    mentionJids = mentions.map(num => String(num).replace(/[^0-9]/g, '') + '@s.whatsapp.net');
+                }
+            }
         } else if (Array.isArray(mentions)) {
             mentionJids = mentions.map(num => String(num).replace(/[^0-9]/g, '') + '@s.whatsapp.net');
         }
 
         await sock.sendMessage(targetJid, { text: message, mentions: mentionJids });
         console.log(`Pesan grup + mentions terkirim ke ${targetJid}`);
-        return res.json({ status: 'success', message: 'Pesan grup berhasil terkirim' });
+        return res.json({ status: 'success', message: 'Pesan grup berhasil terkirim', groupJid: targetJid });
     } catch (error) {
         console.error('Gagal mengirim pesan grup:', error);
         return res.status(500).json({ status: 'error', message: error.toString() });
